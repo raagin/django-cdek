@@ -41,22 +41,6 @@ class CDEKClient:
             raise CDEKException('Invalid API version')
 
     def _handle_errors(self, response, data):
-        """
-        data = {
-            'requests': [
-                {
-                    'request_uuid': 'ad827904-e857-4f85-a71e-fe1ea0ac3b31',
-                    'type': 'CREATE',
-                    'date_time': '2023-07-21T14:08:34+0000',
-                    'state': 'INVALID',
-                    'errors': [
-                    {
-                        'code': 'v2_invalid_value_type',
-                        'message': 'Invalid value type in [] field'
-                    }]
-                }]
-        }
-        """
         if isinstance(data, dict):
             if 'error' in data:
                 raise CDEKException(
@@ -84,13 +68,6 @@ class CDEKClient:
             r = requests.delete(request_url, params=params, headers=headers)
         else:
             raise NotImplementedError('Unknown method %s' % method)
-
-        print('EXECUTE: %s %s' % (method, r.url))
-        print('HEADERS: %s' % headers)
-        print('DATA: %s' % data)
-        # logger.debug('EXECUTE: %s %s' % (method, r.url))
-        # logger.debug('HEADERS: %s' % headers)
-        # logger.debug('DATA: %s' % data)
         resp_json = r.json()
         self._handle_errors(r, resp_json)
         return resp_json
