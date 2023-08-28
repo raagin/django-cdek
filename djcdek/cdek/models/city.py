@@ -13,8 +13,8 @@ class City(models.Model):
                     default=None, blank=True, null=True)
     kladr_code = models.CharField('Код КЛАДР населенного пункта', max_length=100,
                     default=None, blank=True, null=True)
-    longitude = models.FloatField('Код населенного пункта', default=None, blank=True, null=True)
-    latitude = models.FloatField('Код населенного пункта', default=None, blank=True, null=True)
+    longitude = models.FloatField('longitude', default=None, blank=True, null=True)
+    latitude = models.FloatField('latitude', default=None, blank=True, null=True)
     timezone = models.CharField('Временная зона', max_length=50, default=None, blank=True, null=True)
     payment_limit = models.IntegerField('Платежные ограничения', default=None, blank=True, null=True)
     postal_codes = models.TextField('Почтовые индексы (через ;)', default=None, blank=True, null=True)

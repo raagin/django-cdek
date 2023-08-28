@@ -13,7 +13,6 @@ __all_ = [
     'CDEKPhone',
     'CDEKSender',
     'CDEKSeller',
-    'CDEKSeller',
     'CDEKLocation',
     'CDEKService',
     'CDEKItem',
@@ -132,7 +131,14 @@ class CDEKSeller(CDEKSerializable):
     phone: str = None
     """ Телефон истинного продавца """
     ownership_form: int = None
-    """ Код формы собственности  (подробнее см. приложение 3 https://confluence.cdek.ru/pages/viewpage.action?pageId=29923926#)"""
+    """ Код формы собственности
+        9   Акционерное общество
+        61  Закрытое акционерное общество
+        63  Индивидуальный предприниматель
+        119 Открытое акционерное общество
+        137 Общество с ограниченной ответственностью
+        147 Публичное акционерное общество
+    """
 
     def __init__(self, name: str = None, inn: str = None, phone: str = None, ownership_form: int = None):
         self.name = name

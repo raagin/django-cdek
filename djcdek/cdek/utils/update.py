@@ -2,12 +2,12 @@ import logging
 from djcdek.cdek.models import *
 from djcdek.cdek.client import CDEKDjangoClient
 
+logger = logging.getLogger('cdek')
 
 def update_regions():
     """
     Обновляет справочник регионов и стран из базы данных CDEK 
     """
-    logger = logging.getLogger('cdek')
 
     logger.info('Update regions and countries')
     client = CDEKDjangoClient()
@@ -20,7 +20,10 @@ def update_regions():
         for item in response:
             region = Region.objects.filter(title=item.get('region'), country__code=item.get('country_code')).first()
             if not region:
-                country, result = Country.objects.get_or_create(title=item.get('country'), code=item.get('country_code'))
+                code = item.get('country_code')
+                if not code:
+                    continue
+                country, result = Country.objects.get_or_create(title=item.get('country'), code=code)
                 region = Region.objects.create(
                     title=item.get('region'),
                     country=country,
@@ -48,21 +51,22 @@ def update_cities():
     logger.info('Update city')
     client = CDEKDjangoClient()
     page_size = 1000 #размер страницы запроса
-    current_page = 0
+    current_page = 143
     while True:
         logger.info('Page %s' % current_page)
         response = client.get_cities(size=page_size, page=current_page)
         logger.info('Get %s elements' % len(response))
         for item in response:
             city = City.objects.filter(code=item.get('code')).first()
-            if not city:
-                region = Region.objects.filter(title=item.get('region'), country__code=item.get('country_code')).first()
-                city = City.objects.create(
-                    title=item.get('city'),
-                    code=item.get('code'),
-                    region=region,
-                )
-                logger.info('Create %s city' % city.title)
+            if city:
+                continue
+            region = Region.objects.filter(title=item.get('region'), country__code=item.get('country_code')).first()
+            city = City.objects.create(
+                title=item.get('city'),
+                code=item.get('code'),
+                region=region,
+            )
+            logger.info('Create %s city' % city.title)
             city.fias_guid=item.get('fias_guid')
             city.kladr_code=item.get('kladr_code')
             city.postal_codes = ';'.join(item.get('postal_codes', [])) if item.get('postal_codes') else ''

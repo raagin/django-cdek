@@ -14,7 +14,5 @@ class CDEKDjangoClient(CDEKClient):
         super(CDEKDjangoClient, self).__init__(None, None, settings.CDEK_CLIENT_TEST)
         self.client_id = settings.CDEK_CLIENT_ID
         self.client_secret = settings.CDEK_CLIENT_SECRET
-        self.account = getattr(settings, 'CDEK_ACCOUNT', None)
-        self.secure = getattr(settings, 'CDEK_SECURE', None)
 
         

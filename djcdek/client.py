@@ -1,8 +1,9 @@
 import logging
 import json
+import requests
 from typing import List, Dict, Optional, Union
-from urllib.request import Request, urlopen
-from urllib.parse import urlencode
+# from urllib.request import Request, urlopen
+# from urllib.parse import urlencode
 from datetime import datetime
 
 from .exceptions import CDEKException
@@ -10,25 +11,22 @@ from .serialize import CDEKSerializable, CDEKEncoder
 from .types import *
 
 
-API_URL = 'http://api.cdek.ru/v2/'
-APIV1_URL = 'http://api.cdek.ru/'
-API_URL_TEST = 'http://api.edu.cdek.ru/v2/'
+API_URL = 'https://api.cdek.ru/v2/'
+APIV1_URL = 'https://api.cdek.ru/'
+API_URL_TEST = 'https://api.edu.cdek.ru/v2/'
 ACCESS_URL = 'oauth/token'
 
 logger = logging.getLogger('cdek')
 
 
 class CDEKClient:
-    def __init__(self, client_id: str, client_secret: str, test: bool = False, account: str = None, secure_password: str = None):
+    def __init__(self, client_id: str, client_secret: str, test: bool = False):
         self.client_id = client_id
         self.client_secret = client_secret
         self.test = test
         self.access_token = None
         self.expires_token = 0
         self.timestamp_token = None
-
-        self.account = account
-        self.secure_password = secure_password
 
 
     def _get_api_url(self, version: str = '2') -> str:
@@ -42,49 +40,60 @@ class CDEKClient:
         else:
             raise CDEKException('Invalid API version')
 
-    def _handle_errors(self, response):
-        if isinstance(response, dict):
-            if response.get('errors', []):
-                error = response['errors'][0]
-                raise CDEKException(code=error.get('code'), message=error.get('message'))
-
-            # обработчик ошибок 1 версии API
-            if response.get('error', []):
-                error = response['error'][0]
-                raise CDEKException(code=error.get('code'), message=error.get('text'))
-
-            for r in response.get('requests', []):
-                if r.get('state') == 'INVALID':
-                    if r.get('errors', []):
-                        error = r['errors'][0]
-                        raise CDEKException(code=error.get('code'), message=error.get('message'))
-                    raise CDEKException(code='unknown', message='Unknown error')
+    def _handle_errors(self, response, data):
+        """
+        data = {
+            'requests': [
+                {
+                    'request_uuid': 'ad827904-e857-4f85-a71e-fe1ea0ac3b31',
+                    'type': 'CREATE',
+                    'date_time': '2023-07-21T14:08:34+0000',
+                    'state': 'INVALID',
+                    'errors': [
+                    {
+                        'code': 'v2_invalid_value_type',
+                        'message': 'Invalid value type in [] field'
+                    }]
+                }]
+        }
+        """
+        if isinstance(data, dict):
+            if 'error' in data:
+                raise CDEKException(
+                            code=data.get('error'), 
+                            message=data.get('error_description'),
+                            status=response.status_code)
+            for req in data.get('requests', []):
+                error = req['errors'][0] if req.get('errors') else None
+                if error:
+                    raise CDEKException(
+                            code=error.get('code'), 
+                            message=error.get('message'),
+                            status=response.status_code)
 
     def _execute_request(self, url: str, params: dict = None, data: dict = None, method: str='GET', content_type: str='application/json', version: str = '2') -> dict:
         request_url = self._get_api_url(version=version) + url
-        if params:
-            request_url += '?' + urlencode(params, True)
+        headers = {}
+        if self.access_token:
+            headers.update({'Authorization': 'Bearer ' + self.access_token})
         if method == 'GET':
-            request = Request(request_url)
-        elif method in ['POST', 'DELETE']:
-            json_dump = data.encode() if data else None
-            request = Request(request_url, data=json_dump, method=method, headers={
-                'content-type': content_type,
-                'content-length': len(json_dump) if json_dump else 0,
-            })
+            r = requests.get(request_url, params=params, headers=headers)
+        elif method == 'POST':
+            r = requests.post(request_url, params=params, json=data, headers=headers)
+        elif method == 'DELETE':
+            r = requests.delete(request_url, params=params, headers=headers)
         else:
             raise NotImplementedError('Unknown method %s' % method)
 
-        if self.access_token:
-            request.add_header('Authorization', 'Bearer ' + self.access_token)
-        logger.debug('EXECUTE: %s %s' % (method, request.full_url))
-        logger.debug('HEADERS: %s' % request.header_items())
-        logger.debug('DATA: %s' % data)
-        response = urlopen(request, timeout=10).read()
-        # print('RESPONSE: %s' % response)
-        data = json.loads(response)
-        self._handle_errors(data)
-        return data
+        print('EXECUTE: %s %s' % (method, r.url))
+        print('HEADERS: %s' % headers)
+        print('DATA: %s' % data)
+        # logger.debug('EXECUTE: %s %s' % (method, r.url))
+        # logger.debug('HEADERS: %s' % headers)
+        # logger.debug('DATA: %s' % data)
+        resp_json = r.json()
+        self._handle_errors(r, resp_json)
+        return resp_json
 
     def _is_authorized(self) -> bool:
         if self.access_token and self.expires_token and self.timestamp_token:
@@ -249,6 +258,7 @@ class CDEKClient:
         return идентификатор заказа
         """
         response = self._execute_authorized('orders', data=json.dumps(request, cls=CDEKEncoder), method='POST')
+
         try:
             return response['entity']['uuid']
         except KeyError:
@@ -260,7 +270,7 @@ class CDEKClient:
 
         uuid - идентификатор заказа
         """
-        return self._execute_authorized('orders/' + uuid)
+        return self._execute_authorized('intakes/' + uuid)
 
     def delete_order(self, uuid: str) -> dict:
         """ 
@@ -268,7 +278,7 @@ class CDEKClient:
 
         uuid - идентификатор заказа
         """
-        return self._execute_authorized('orders/' + uuid, method='DELETE')
+        return self._execute_authorized('intakes/' + uuid, method='DELETE')
 
     def print_request(self, uuids: List[str], copy_count: int = 2) -> str:
         """ 
@@ -375,24 +385,4 @@ class CDEKClient:
             url = barcode_info['entity']['url']
         except KeyError:
             return None
-
-    def get_delivery_price(self, request: CDEKDeliveryRequest) -> float:
-        """
-        DEPRECATED: Используй get_tariff
-
-        Возвращает стоимость доставки по переданным параметрам
-
-        request -- объект запроса доставки
-
-        Работает по API v1
-        """
-        if not request.authLogin and self.account:
-            request.authLogin = self.account
-            request.secure = self.secure_password
-        response = self._execute_request('calculator/calculate_price_by_json.php', method='POST', data=json.dumps(request, cls=CDEKEncoder), version='1')
-        if 'result' in response:
-            return CDEKDeliveryResponse(**response['result'])
-        else:
-            raise CDEKException(code='invalid response', message='Invalid delivery response')
-
     
